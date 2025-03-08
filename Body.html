@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Maze Solver Visualization</title>
+  <style>
+    .body {
+      font-family: Arial, sans-serif;
+      background-color: #f3b9eb;
+      color: #333;
+      margin: 0;
+      padding: 20px;
+      text-align: center;
+    }
+    h1 {
+      text-align: center;
+      color: #333;
+      font-size: 32px;
+      margin-bottom: 20px;
+    }
+    .h3{
+       text-align: center;
+       color: #333;
+       font-size: 8px;
+    }
+    .maze {
+      display: grid;
+      gap: 2px;
+      background: #e0e0e0;
+      padding: 10px;
+      border-radius: 8px;
+      margin: 20px auto;
+      max-width: 90%;
+    }
+    .cell {
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid #ccc;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .cell:hover {
+      transform: scale(1.1);
+      box-shadow: 0 calc(var(--shadow-offset)*2) calc((var(--shadow-offset)*4)rgba(0,0,0,0.2));
+      cursor: pointer;
+    }
+    .wall {
+      background-color: black;
+      cursor: not-allowed;
+    }
+    .path {
+      background-color: #6dd5ed;
+      animation: path-highlight 1s ease-out;
+    }
+    @keyframes path-highlight {
+      from {
+        background: #fff;
+      }
+      to {
+        background: #6dd5ed;
+      }
+    }
+    .start {
+      background-color: #00b09b;
+      pointer-events: none;
+    }
+    .end {
+      background-color: #f85032;
+    }
+    .explanation {
+      margin-top: 20px;
+      padding: 20px;
+      border-left: 5px solid #4caf50;
+      border-right: 8px;
+      background: #f7f7f7;
+      font-family: Arial, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    select {
+      padding: 10px;
+      font-size: 15px;
+      border: 2px solid #ccc;
+      border-radius: 8px;
+      background: #f9f9f9;
+      cursor: pointer;
+    }
+    button:hover{
+      background: #5ad860;
+      transform: scale(1.05);
+      border-radius: 5px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Maze Solver Visualization</h1>
+  <h3>Description: Used to study the inefficiencies between Depth-first-search, Breadth-first-search, A* algorithm using a random maze generator</h3>
+
+  <label for="mazeSize">Choose maze size:</label>
+  <select id="mazeSize" onchange="generateMaze()">
+    <option value="5">5x5</option>
+    <option value="6">6x6</option>
+    <option value="7">7x7</option>
+    <option value="8">8x8</option>
+    <option value="9">9x9</option>
+    <option value="10">10x10</option>
+  </select>
+
+  <label for="algorithm">Choose an algorithm:</label>
+  <select id="algorithm" onchange="updateExplanation()">
+    <option value="dfs">Depth-First Search (DFS)</option>
+    <option value="bfs">Breadth-First Search (BFS)</option>
+    <option value="astar">A* Search</option>
+  </select>
+  
+  <p>Click on a valid cell to set the target (end point), then solve the maze.</p>
+  <button onclick="solveMaze()">Solve Maze</button>
+  <div id="mazeSize" class="mazeSize"></div>
+  <div id="maze" class="maze"></div>
+  <div id="explanation" class="explanation"></div>
+
+  <script>
+    let maze = [];
+    let start = [0, 0];
+    let end = [4, 4];
+    const mazeContainer = document.getElementById("maze");
+    const mazeSizeSelector = document.getElementById("mazeSize");
+    const algorithmSelector = document.getElementById("algorithm");
+    const explanationBox = document.getElementById("explanation");
+
+    // Generate a maze based on the selected size
+    function generateMaze() {
+      const size = parseInt(mazeSizeSelector.value);
+      maze = Array.from({ length: size }, () =>
+        Array.from({ length: size }, () => (Math.random() < 0.3 ? 1 : 0))
+      );
+
+      // Ensure start and end points are passable
+      maze[0][0] = 0;
+      start = [0, 0];
+      end = [size - 1, size - 1];
+      maze[end[0]][end[1]] = 0;
+
+      mazeContainer.style.gridTemplateColumns = `repeat(${size}, 40px)`;
+      renderMaze();
+    }
+
+    // Render the maze
+    function renderMaze() {
+      mazeContainer.innerHTML = "";
+      maze.forEach((row, i) => {
+        row.forEach((cell, j) => {
+          const div = document.createElement("div");
+          div.classList.add("cell");
+          if (cell === 1) div.classList.add("wall");
+          if (i === start[0] && j === start[1]) div.classList.add("start");
+          if (i === end[0] && j === end[1]) div.classList.add("end");
+          div.addEventListener("click", () => setEndPoint(i, j));
+          mazeContainer.appendChild(div);
+        });
+      });
+    }
+
+    // Highlight the path
+    function highlightPath(path) {
+      renderMaze();
+      path.forEach(([x, y]) => {
+        const index = x * maze[0].length + y;
+        mazeContainer.children[index].classList.add("path");
+      });
+    }
+
+    // Set the target (end point)
+    function setEndPoint(x, y) {
+      if (maze[x][y] === 1 || (x === start[0] && y === start[1])) {
+        alert("Invalid target point. Choose a passable cell that is not the start point.");
+        return;
+      }
+      end = [x, y];
+      renderMaze();
+    }
+
+    // DFS Algorithm
+    function solveMazeDFS() {
+      const directions = [[0, 1], [1, 0], [0, -1], [-1, 0]];
+      const visited = Array.from({ length: maze.length }, () => Array(maze[0].length).fill(false));
+
+      function dfs(x, y, path) {
+        if (x === end[0] && y === end[1]) {
+          path.push([x, y]);
+          return true;
+        }
+        visited[x][y] = true;
+        path.push([x, y]);
+
+        for (const [dx, dy] of directions) {
+          const newX = x + dx;
+          const newY = y + dy;
+          if (
+            newX >= 0 &&
+            newX < maze.length &&
+            newY >= 0 &&
+            newY < maze[0].length &&
+            maze[newX][newY] === 0 &&
+            !visited[newX][newY]
+          ) {
+            if (dfs(newX, newY, path)) return true;
+          }
+        }
+        path.pop();
+        return false;
+      }
+
+      const path = [];
+      dfs(start[0], start[1], path);
+      return path;
+    }
+
+    // BFS Algorithm
+    function solveMazeBFS() {
+      const directions = [[0, 1], [1, 0], [0, -1], [-1, 0]];
+      const visited = Array.from({ length: maze.length }, () => Array(maze[0].length).fill(false));
+      const queue = [[start[0], start[1], []]];
+
+      while (queue.length > 0) {
+        const [x, y, path] = queue.shift();
+        if (x === end[0] && y === end[1]) {
+          return [...path, [x, y]];
+        }
+        visited[x][y] = true;
+
+        for (const [dx, dy] of directions) {
+          const newX = x + dx;
+          const newY = y + dy;
+          if (
+            newX >= 0 &&
+            newX < maze.length &&
+            newY >= 0 &&
+            newY < maze[0].length &&
+            maze[newX][newY] === 0 &&
+            !visited[newX][newY]
+          ) {
+            queue.push([newX, newY, [...path, [x, y]]]);
+          }
+        }
+      }
+      return [];
+    }
+
+    // A* Algorithm
+    function solveMazeAStar() {
+      const directions = [[0, 1], [1, 0], [0, -1], [-1, 0]];
+
+      function heuristic([x, y], [ex, ey]) {
+        return Math.abs(x - ex) + Math.abs(y - ey);
+      }
+
+      const openSet = [[...start, 0, []]];
+      const visited = Array.from({ length: maze.length }, () => Array(maze[0].length).fill(false));
+
+      while (openSet.length > 0) {
+        openSet.sort((a, b) => a[2] - b[2]);
+        const [x, y, cost, path] = openSet.shift();
+        if (x === end[0] && y === end[1]) {
+          return [...path, [x, y]];
+        }
+        visited[x][y] = true;
+
+        for (const [dx, dy] of directions) {
+          const newX = x + dx;
+          const newY = y + dy;
+          if (
+            newX >= 0 &&
+            newX < maze.length &&
+            newY >= 0 &&
+            newY < maze[0].length &&
+            maze[newX][newY] === 0 &&
+            !visited[newX][newY]
+          ) {
+            openSet.push([newX, newY, cost + 1 + heuristic([newX, newY], end), [...path, [x, y]]]);
+          }
+        }
+      }
+      return [];
+    }
+
+    // Update the explanation text based on the selected algorithm
+    function updateExplanation() {
+      const algorithm = algorithmSelector.value;
+      let explanation = "";
+
+      if (algorithm === "dfs") {
+        explanation = `Depth-First Search (DFS) explores as deeply as possible along each path before backtracking. 
+        It may not always find the shortest path but is useful for exhaustive searches in smaller spaces.`;
+      } else if (algorithm === "bfs") {
+        explanation = `Breadth-First Search (BFS) explores level by level, ensuring that the shortest path is found in unweighted mazes. 
+        It systematically examines all nodes at the current depth before moving deeper.`;
+      } else if (algorithm === "astar") {
+        explanation = `A* Search combines aspects of BFS and heuristics. It prioritizes paths based on their current cost and estimated distance to the goal. 
+        This often results in faster solutions in complex mazes.`;
+      }
+
+      explanationBox.textContent = explanation;
+    }
+
+    // Solve Maze based on selected algorithm
+    function solveMaze() {
+      const algorithm = algorithmSelector.value;
+      let path = [];
+
+      if (algorithm === "dfs") {
+        path = solveMazeDFS();
+      } else if (algorithm === "bfs") {
+        path = solveMazeBFS();
+      } else if (algorithm === "astar") {
+        path = solveMazeAStar();
+      }
+
+      if (path.length > 0) {
+        highlightPath(path);
+      } else {
+        alert("No solution found for the maze.");
+      }
+    }
+
+    generateMaze();
+    updateExplanation(); // Set the default explanation
+  </script>
+</body>
+</html>
